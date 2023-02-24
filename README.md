@@ -1,6 +1,6 @@
-# Deta Cli - A command line companion for Deta Drive
+# `deta-drive` - A command line companion for Deta Drive
 
-Deta Cli is a command line companion for Deta Drive. It allows you to manage your Deta Drive files from the command line.
+`deta-drive` is a command line companion for Deta Drive. It allows you to manage your Deta Drive files from the command line.
 
 ## Installation
 
@@ -43,4 +43,3 @@ deta-drive cat deta://my-drive/file.txt
 ```bash
 deta-drive rm deta://my-drive/file.txt
 ```
-
