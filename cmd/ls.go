@@ -3,6 +3,7 @@ package cmd
 import (
 	"fmt"
 	"net/url"
+	"strings"
 
 	"github.com/deta/deta-go/deta"
 	"github.com/deta/deta-go/service/drive"
@@ -19,6 +20,11 @@ var lsCmd = &cobra.Command{
 			return fmt.Errorf("could not get drive from context")
 		}
 
+		recursive, err := cmd.Flags().GetBool("recursive")
+		if err != nil {
+			return fmt.Errorf("could not get recursive flag: %w", err)
+		}
+
 		entryUrl, err := url.Parse(args[0])
 		if err != nil {
 			return fmt.Errorf("could not parse url: %w", err)
@@ -33,12 +39,23 @@ var lsCmd = &cobra.Command{
 			return fmt.Errorf("could not get drive: %w", err)
 		}
 
-		out, err := disk.List(1000, entryUrl.Path, "")
+		prefix := entryUrl.Path
+		if !strings.HasSuffix(prefix, "/") {
+			prefix = fmt.Sprintf("%s/", prefix)
+		}
+
+		out, err := disk.List(1000, prefix, "")
 		if err != nil {
 			return fmt.Errorf("could not list files: %w", err)
 		}
 
 		for _, name := range out.Names {
+			if !recursive {
+				relativePath := strings.TrimPrefix(name, prefix)
+				if strings.Contains(relativePath, "/") {
+					continue
+				}
+			}
 			fmt.Printf("%s%s\n", entryUrl, name)
 		}
 
@@ -47,5 +64,7 @@ var lsCmd = &cobra.Command{
 }
 
 func init() {
+	lsCmd.Flags().BoolP("recursive", "r", false, "list files recursively")
+
 	rootCmd.AddCommand(lsCmd)
 }
