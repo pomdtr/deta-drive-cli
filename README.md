@@ -12,6 +12,10 @@ go install github.com/pomdtr/deta-drive@latest
 
 The cli supports most of the classic unix commands you are used to. Use `deta-drive help` to get a list of all commands.
 
+### Authentication
+
+You can authenticate with the cli using the `DETA_PROJECT_KEY` environment variable, or by using the `--data-key` flag.
+
 ## Examples
 
 ### Upload a file
