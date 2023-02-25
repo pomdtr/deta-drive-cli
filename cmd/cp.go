@@ -5,6 +5,7 @@ import (
 	"io"
 	"net/url"
 	"os"
+	"path"
 
 	"github.com/deta/deta-go/deta"
 	"github.com/deta/deta-go/service/drive"
@@ -21,67 +22,100 @@ var cpCmd = &cobra.Command{
 			return fmt.Errorf("could not get drive from context")
 		}
 
-		srcUrl, err := url.Parse(args[0])
+		readerCloser, err := getReaderCloser(deta, args[0])
 		if err != nil {
-			return fmt.Errorf("could not parse source url: %w", err)
+			return fmt.Errorf("could not get reader: %w", err)
 		}
+		defer readerCloser.Close()
 
-		destUrl, err := url.Parse(args[1])
-		if err != nil {
-			return fmt.Errorf("could not parse destination url: %w", err)
-		}
-
-		if srcUrl.Scheme != "deta" && destUrl.Scheme != "deta" {
-			return fmt.Errorf("source or destination must be a deta url")
-		}
-
-		if srcUrl.Scheme != "deta" {
-			disk, err := drive.New(deta, destUrl.Host)
-			if err != nil {
-				return fmt.Errorf("could not get drive: %w", err)
-			}
-
-			file, err := os.Open(srcUrl.Path)
-			if err != nil {
-				return fmt.Errorf("could not read file: %w", err)
-			}
-
-			if _, err = disk.Put(&drive.PutInput{
-				Name: destUrl.Path,
-				Body: file,
-			}); err != nil {
-				return fmt.Errorf("could not put file: %w", err)
-			}
-
-			fmt.Println("file uploaded")
-			return nil
-		}
-
-		if destUrl.Scheme != "deta" {
-			disk, err := drive.New(deta, srcUrl.Host)
-			if err != nil {
-				return fmt.Errorf("could not get drive: %w", err)
-			}
-
-			file, err := os.Create(destUrl.Path)
-			if err != nil {
-				return fmt.Errorf("could not create file: %w", err)
-			}
-
-			reader, err := disk.Get(srcUrl.Path)
-			if err != nil {
-				return fmt.Errorf("could not get file: %w", err)
-			}
-
-			if _, err := io.Copy(file, reader); err != nil {
-				return fmt.Errorf("could not copy file: %w", err)
-			}
-
-			return nil
+		if err := copyContent(deta, readerCloser, args[1]); err != nil {
+			return fmt.Errorf("could not copy file: %w", err)
 		}
 
 		return nil
 	},
+}
+
+func getReaderCloser(deta *deta.Deta, src string) (io.ReadCloser, error) {
+	if src == "-" {
+		return os.Stdin, nil
+	}
+
+	if info, err := os.Stat(src); err == nil {
+		if info.IsDir() {
+			return nil, fmt.Errorf("reading from directories is not supported")
+		}
+
+		return os.Open(src)
+	}
+
+	srcUrl, err := url.Parse(src)
+	if err != nil {
+		return nil, fmt.Errorf("could not parse source url: %w", err)
+	}
+
+	if srcUrl.Scheme != "deta" {
+		return nil, fmt.Errorf("source must be a deta url")
+	}
+
+	disk, err := drive.New(deta, srcUrl.Host)
+	if err != nil {
+		return nil, fmt.Errorf("could not get drive: %w", err)
+	}
+
+	reader, err := disk.Get(srcUrl.Path)
+	if err != nil {
+		return nil, fmt.Errorf("could not get file: %w", err)
+	}
+
+	return reader, nil
+}
+
+func copyContent(deta *deta.Deta, reader io.Reader, dest string) error {
+	if dest == "-" {
+		if _, err := io.Copy(os.Stdout, reader); err != nil {
+			return fmt.Errorf("could not read file: %w", err)
+		}
+		return nil
+	}
+
+	dirname := path.Dir(dest)
+	if _, err := os.Stat(dirname); err == nil {
+		writer, err := os.Create(dest)
+		if err != nil {
+			return fmt.Errorf("could not create file: %w", err)
+		}
+		defer writer.Close()
+
+		if _, err = io.Copy(writer, reader); err != nil {
+			return fmt.Errorf("could not read file: %w", err)
+		}
+
+		return nil
+	}
+
+	destUrl, err := url.Parse(dest)
+	if err != nil {
+		return fmt.Errorf("could not parse destination url: %w", err)
+	}
+
+	if destUrl.Scheme != "deta" {
+		return fmt.Errorf("destination must be a deta url")
+	}
+
+	disk, err := drive.New(deta, destUrl.Host)
+	if err != nil {
+		return fmt.Errorf("could not get drive: %w", err)
+	}
+
+	if _, err := disk.Put(&drive.PutInput{
+		Name: destUrl.Path,
+		Body: reader,
+	}); err != nil {
+		return fmt.Errorf("could not put file: %w", err)
+	}
+
+	return nil
 }
 
 func init() {
