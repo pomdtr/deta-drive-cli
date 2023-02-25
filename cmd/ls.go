@@ -56,7 +56,7 @@ var lsCmd = &cobra.Command{
 					continue
 				}
 			}
-			fmt.Printf("%s%s\n", entryUrl, name)
+			fmt.Printf("%s://%s%s%s\n", entryUrl.Scheme, entryUrl.Host, prefix, name)
 		}
 
 		return nil
